@@ -1,0 +1,7 @@
+node_modules/
+dist/
+artifacts/
+tests/compiler-case-*/
+.env
+.env.*
+!.env.example

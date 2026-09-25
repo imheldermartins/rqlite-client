@@ -1,0 +1,72 @@
+{
+  "name": "@cubs/rqlite-client",
+  "version": "1.0.0",
+  "description": "Typed rqlite client, declarative schemas and migrations",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imheldermartins/rqlite-client.git"
+  },
+  "homepage": "https://github.com/imheldermartins/rqlite-client#readme",
+  "bugs": "https://github.com/imheldermartins/rqlite-client/issues",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "import": "./dist/schema/index.js"
+    },
+    "./compiler": {
+      "types": "./dist/compiler/index.d.ts",
+      "import": "./dist/compiler/index.js"
+    },
+    "./migrations": {
+      "types": "./dist/migrations/index.d.ts",
+      "import": "./dist/migrations/index.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./project": {
+      "types": "./dist/project.d.ts",
+      "import": "./dist/project.js"
+    },
+    "./compat": {
+      "types": "./dist/compat/index.d.ts",
+      "import": "./dist/compat/index.js"
+    }
+  },
+  "bin": {
+    "rqlite": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run tests",
+    "test:consumer": "node scripts/consumer-smoke.mjs",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "typescript-compiler": "npm:typescript@6.0.3",
+    "ulid": "3.0.2",
+    "tsx": "4.23.15",
+    "squel": "6.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  }
+}

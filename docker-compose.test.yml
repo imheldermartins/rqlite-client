@@ -1,0 +1,13 @@
+services:
+  package:
+    image: rqlite/rqlite:10.3.3@sha256:d333ab884b9451aecb12e29fbc2dfbb013d9f582763f288d79dcac5f20bfc312
+    entrypoint: ["rqlited"]
+    command: ["-node-id", "rqlite-package", "-http-addr", "0.0.0.0:4001", "-http-adv-addr", "package:4001", "-raft-addr", "0.0.0.0:4002", "-raft-adv-addr", "package:4002", "/rqlite/file"]
+    ports: ["127.0.0.1:18015:4001"]
+    tmpfs: ["/rqlite/file:uid=1000,gid=1000"]
+  consumer:
+    image: rqlite/rqlite:10.3.3@sha256:d333ab884b9451aecb12e29fbc2dfbb013d9f582763f288d79dcac5f20bfc312
+    entrypoint: ["rqlited"]
+    command: ["-node-id", "rqlite-consumer", "-http-addr", "0.0.0.0:4001", "-http-adv-addr", "consumer:4001", "-raft-addr", "0.0.0.0:4002", "-raft-adv-addr", "consumer:4002", "/rqlite/file"]
+    ports: ["127.0.0.1:18016:4001"]
+    tmpfs: ["/rqlite/file:uid=1000,gid=1000"]

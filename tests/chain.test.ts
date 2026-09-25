@@ -1,0 +1,22 @@
+import {it,expect} from 'vitest';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,unlinkSync} from 'node:fs';
+import path from 'node:path';
+import {tmpdir} from 'node:os';
+import {emptySchema} from '../src/config.js';
+import {addMigration,loadChain} from '../src/migrations/files.js';
+it('detects interrupted publication, missing snapshots and a fork instead of sorting it by timestamp',async()=>{
+  const dir=mkdtempSync(path.join(tmpdir(),'orm-chain-'));mkdirSync(path.join(dir,'meta'));
+  const journalFile=path.join(dir,'meta/journal.json');
+  writeFileSync(journalFile,JSON.stringify({formatVersion:1,baseline:emptySchema(),baselineCatalog:'[]',legacy:[],entries:[]}));
+  const migration=await addMigration(dir,emptySchema(),'manual',{manual:true});
+  expect(migration?.state).toBe('draft');
+  const chain=await loadChain(dir),entry=chain.journal.entries[0];
+  const source=path.join(dir,entry.file),original=readFileSync(source,'utf8');
+  writeFileSync(source,original.replace('"parentId": null','"parentId": "same_predecessor_other_branch"'));
+  await expect(loadChain(dir)).rejects.toThrow('Fork/dependency');
+  writeFileSync(source,original);
+  const orphan=path.join(dir,'unpublished.ts');writeFileSync(orphan,'export const migration = {};');
+  await expect(loadChain(dir)).rejects.toThrow('Unjournaled');unlinkSync(orphan);
+  const snapshot=path.join(dir,'meta',entry.snapshot);unlinkSync(snapshot);
+  await expect(loadChain(dir)).rejects.toThrow('ENOENT');
+});
