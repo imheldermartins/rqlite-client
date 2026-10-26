@@ -5,12 +5,12 @@ TypeScript 7 consumers, isolated TypeScript 6.0.3 schema compiler. Validated aga
 rqlite 10.3.3 / SQLite 3.53.4.
 
 ```sh
-npm install @cubs/rqlite-client@1.0.0
+npm install @cubs/rqlite-client@1.1.0
 ```
 
 The installed executable is **rqlite**, usable as `npx rqlite` from that project.
 For a one-off invocation without installation, use
-`npm exec --package @cubs/rqlite-client@1.0.0 -- rqlite --help`.
+`npm exec --package @cubs/rqlite-client@1.1.0 -- rqlite --help`.
 
 ## Connect immediately
 
@@ -120,6 +120,38 @@ does no I/O. Call `client.migrations.status()`, `.up()` and `client.assertReady(
 explicitly. `client.sql.query()` and `.batch()` expose parameterized SQL and
 declarative request transactions. There is no interactive transaction callback.
 `connection` also accepts an injected fetch and request timeout.
+
+### Authentication (1.1.0)
+
+```ts
+import {createClient, basicAuthFromEnv} from '@cubs/rqlite-client';
+const client = createClient({connection: {
+  url: process.env.DATABASE_URL!,
+  auth: basicAuthFromEnv('DATABASE_USERNAME', 'DATABASE_PASSWORD'),
+}});
+```
+
+Configure CLI targets with environment variable **names**, never literal passwords:
+
+```ts
+production: {
+  urlEnv: 'DATABASE_URL', development: false,
+  auth: {usernameEnv: 'DATABASE_USERNAME', passwordEnv: 'DATABASE_PASSWORD'},
+}
+```
+
+Both credentials are required for a target declaring `auth`. `prepare` preserves
+only these environment references. Existing unauthenticated targets still work.
+Basic Auth is sent to readiness and SQL endpoints; authenticated redirects are
+refused. Use TLS or a private encrypted tunnel outside a trusted local network.
+URLs with embedded credentials remain unsupported. SQL requests return `AUTH`
+for HTTP 401 and `FORBIDDEN` for HTTP 403 without retrying writes or exposing
+response bodies. `isReady()` returns false on denied readiness.
+
+A read-only account needs `query`, `status`, and `ready`; use `client.sql.query()`
+or `batch(statements, {endpoint: 'query'})`. The default mixed `/db/request`
+endpoint requires both `query` and `execute`, even for SELECT statements.
+Permissions are enforced by rqlite for the entire database, not by the client.
 
 Repositories support create, find/findAll, update, updateAndFind and delete.
 `@Table('users', {softDelete: 'deleted_at'})` enables soft deletion. Empty mutation

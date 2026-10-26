@@ -1,0 +1,4 @@
+[
+  {"username":"cubs_user","password":"writer-test-only","perms":["query","execute","status","ready"]},
+  {"username":"cubs_reader","password":"reader-test-only","perms":["query","status","ready"]}
+]

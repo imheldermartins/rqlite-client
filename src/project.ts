@@ -2,7 +2,7 @@ import {existsSync,readFileSync,readdirSync,cpSync,mkdirSync} from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {spawn,type ChildProcess} from 'node:child_process';
-import {RqliteClient} from './client/index.js';
+import {RqliteClient,basicAuthFromEnv} from './client/index.js';
 import {createClient,type ClientSchema,type ModelTypes} from './runtime.js';
 import {emptySchema,type RqliteConfig} from './config.js';
 import {addMigration,atomicWrite,catalog,loadChain,MigrationRunner,migrationChecksum,schemaHash,withGenerationLock} from './migrations/index.js';
@@ -17,6 +17,18 @@ export async function loadProject(file = existsSync('rqlite.config.ts') ? 'rqlit
   return createProject(config,{root:path.dirname(absolute),configFile:absolute});
 }
 export function createProject(config:RqliteConfig,options:{root?:string;configFile?:string}={}) {
+  // JS config files do not have TypeScript's excess-property checks. Reject
+  // literal credentials before prepare can copy them into a runtime artifact.
+  for(const environment of Object.values(config.environments)) {
+    if(environment.auth && (Object.keys(environment.auth).some(key=>!['usernameEnv','passwordEnv'].includes(key))
+      || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(environment.auth.usernameEnv??'')
+      || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(environment.auth.passwordEnv??'')))
+      throw new Error('Database auth configuration must contain only usernameEnv and passwordEnv references');
+    if(environment.url) {
+      const url=new URL(environment.url);
+      if(url.username||url.password)throw new Error('Database config URLs must not contain credentials');
+    }
+  }
   const resolve=(f:string)=>path.resolve(options.root??process.cwd(),f);
   const directory=resolve(config.migrations);
   let dependencies:string[]=[];
@@ -24,7 +36,9 @@ export function createProject(config:RqliteConfig,options:{root?:string;configFi
     const e=config.environments[environment];if(!e)throw new Error('Choose a configured environment explicitly');
     if(e.urlEnv&&!process.env[e.urlEnv]&&!e.url&&!e.host&&!e.hostEnv)throw new Error(`Missing configured database URL: ${e.urlEnv}`);
     const url=(e.urlEnv&&process.env[e.urlEnv])||e.url||`http://${(e.hostEnv&&process.env[e.hostEnv])||e.host||'127.0.0.1'}:${(e.portEnv&&process.env[e.portEnv])||e.port||'4001'}`;
-    return {url};
+    const auth=e.auth?basicAuthFromEnv(e.auth.usernameEnv,e.auth.passwordEnv):undefined;
+    if(e.auth&&!auth)throw new Error('Missing configured database credentials');
+    return {url,...(auth?{auth}:{})};
   };
   const runner=(environment:string)=>new MigrationRunner(new RqliteClient(connection(environment)),directory);
   const compile=async()=>{

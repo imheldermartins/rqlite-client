@@ -6,7 +6,19 @@ export type BatchResult<T = Record<string, unknown>> =
   | { kind: 'execute'; index: number; rowsAffected: number; lastInsertId?: number }
   | { kind: 'ddl'; index: number };
 export interface RequestOptions { endpoint?: 'query' | 'execute' | 'request'; transaction?: boolean; consistency?: 'strong' | 'weak' | 'linearizable' | 'none' }
-export interface ConnectionOptions { url: string; fetch?: typeof fetch; timeoutMs?: number }
+export interface BasicAuthCredentials { username: string; password: string }
+export interface ConnectionOptions { url: string; auth?: BasicAuthCredentials; fetch?: typeof fetch; timeoutMs?: number }
+/** Read an optional credential pair without placing secrets in URLs or config artifacts. */
+export function basicAuthFromEnv(usernameEnv: string, passwordEnv: string, env: Readonly<Record<string, string | undefined>> = process.env): BasicAuthCredentials | undefined {
+  const username = env[usernameEnv], password = env[passwordEnv];
+  if (username === undefined && password === undefined) return undefined;
+  return validateAuth({username: username ?? '', password: password ?? ''});
+}
+function validateAuth(auth: BasicAuthCredentials): BasicAuthCredentials {
+  if (typeof auth.username !== 'string' || !auth.username || /[:\r\n]/.test(auth.username) || typeof auth.password !== 'string' || !auth.password)
+    throw new RqliteError('CONFIG', 'Basic authentication requires a valid username and a nonempty password');
+  return {username: auth.username, password: auth.password};
+}
 export function parseResults<T>(results: unknown): BatchResult<T>[] {
   if (!Array.isArray(results)) throw new RqliteError('PROTOCOL', 'Missing rqlite results');
   return results.map((r, index) => {
@@ -26,14 +38,26 @@ export class RqliteClient {
   private readonly url: URL;
   private readonly fetcher: typeof fetch;
   private readonly timeout: number;
+  private readonly authorization?: string;
   constructor(options: ConnectionOptions) {
     this.url = new URL(options.url);
     if (!['http:', 'https:'].includes(this.url.protocol) || this.url.username || this.url.password) throw new RqliteError('CONFIG', 'Use an HTTP(S) URL without embedded credentials');
     this.fetcher = options.fetch ?? fetch; this.timeout = options.timeoutMs ?? 30000;
+    if (options.auth) {
+      const auth = validateAuth(options.auth);
+      this.authorization = `Basic ${Buffer.from(`${auth.username}:${auth.password}`, 'utf8').toString('base64')}`;
+    }
+  }
+  private requestOptions(): RequestInit {
+    return this.authorization ? {headers: {Authorization: this.authorization}, redirect: 'error'} : {};
+  }
+  private checkAuth(response: Response): void {
+    if (response.status === 401 || response.status === 403)
+      throw new RqliteError(response.status === 401 ? 'AUTH' : 'FORBIDDEN', `rqlite HTTP ${response.status}: authentication or permission denied`);
   }
   async isReady(): Promise<boolean> {
     try {
-      const response = await this.fetcher(new URL('/readyz', this.url), {signal: AbortSignal.timeout(Math.min(this.timeout, 3000))});
+      const response = await this.fetcher(new URL('/readyz', this.url), {...this.requestOptions(), signal: AbortSignal.timeout(Math.min(this.timeout, 3000))});
       return response.ok;
     } catch {
       return false;
@@ -59,7 +83,9 @@ export class RqliteClient {
     let response: Response;
     let payload: any;
     try {
-      response = await this.fetcher(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body, signal: AbortSignal.timeout(this.timeout)});
+      const authOptions = this.requestOptions();
+      response = await this.fetcher(url, {...authOptions, method: 'POST', headers: {...authOptions.headers, 'Content-Type': 'application/json'}, body, signal: AbortSignal.timeout(this.timeout)});
+      this.checkAuth(response);
       if (!response.ok) throw new RqliteError(endpoint === 'query' ? 'HTTP' : 'COMMIT_UNKNOWN', `rqlite HTTP ${response.status}`);
       payload = await response.json();
     } catch (error) {

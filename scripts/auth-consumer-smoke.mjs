@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {mkdtempSync,readFileSync,readdirSync,writeFileSync} from 'node:fs';
+import path from 'node:path';
+const artifacts=path.resolve(process.env.RQLITE_ARTIFACT_DIR??'artifacts/rqlite-validation');
+const report=JSON.parse(readFileSync(path.join(artifacts,`consumer-${process.platform}.json`),'utf8'));
+const consumer=mkdtempSync(path.join(report.consumer,'authenticated-'));
+const cli=path.join(report.consumer,'node_modules/@cubs/rqlite-client/dist/cli/index.js');
+const env={...process.env,AUTH_TEST_USER:'cubs_user',AUTH_TEST_PASSWORD:'writer-test-only'};
+function node(args,expected=0){const r=spawnSync(process.execPath,args,{cwd:consumer,env,encoding:'utf8'});if(r.error)throw r.error;assert.equal(r.status,expected,r.stdout+'\n'+r.stderr);return r.stdout.trim();}
+const command=(...args)=>node([cli,...args]);
+writeFileSync(path.join(consumer,'rqlite.config.js'),`export default {schemas:['../schemas'],output:'generated/auth.ts',migrations:'migrations',build:{config:'dist/rqlite.config.js',client:'dist/generated/auth.js',migrations:'dist/migrations'},environments:{production:{url:'http://127.0.0.1:18019',development:false,auth:{usernameEnv:'AUTH_TEST_USER',passwordEnv:'AUTH_TEST_PASSWORD'}}}};`);
+command('wait','--environment','production');command('init');command('create','migration','authenticated consumer');
+assert.equal(JSON.parse(command('migrate','--dry-run','--environment','production')).pending.length,1);
+command('migrate','--environment','production');
+assert.deepEqual(JSON.parse(command('migrate','status','--environment','production')).pending,[]);
+command('check','--database','--environment','production');
+const files=readdirSync(path.join(consumer,'migrations')).filter(name=>name.endsWith('.ts')).map(name=>`migrations/${name}`);
+node([path.join(report.consumer,'node_modules/typescript/bin/tsc'),'--ignoreConfig','--module','NodeNext','--target','ES2022','--skipLibCheck','--outDir','dist','generated/auth.ts',...files]);
+command('prepare');
+const runtimeConfig=readFileSync(path.join(consumer,'dist/rqlite.config.js'),'utf8');
+assert(!runtimeConfig.includes(env.AUTH_TEST_PASSWORD));assert(runtimeConfig.includes('AUTH_TEST_PASSWORD'));
+command('check','--database','--config','dist/rqlite.config.js','--environment','production');
+writeFileSync(path.join(consumer,'reader.mjs'),`import {RqliteClient} from '@cubs/rqlite-client';const reader=new RqliteClient({url:'http://127.0.0.1:18019',auth:{username:'cubs_reader',password:'reader-test-only'}});if(!await reader.isReady()||(await reader.query('SELECT count(*) AS total FROM items'))[0].total!==0)throw new Error('Reader failed');try{await reader.batch(['DELETE FROM items'],{endpoint:'execute'});throw new Error('Reader wrote');}catch(e){if(e.code!=='AUTH')throw e;}console.log('Authenticated external consumer passed');`);
+node(['reader.mjs']);
+const result={checks:['published tarball runtime Basic Auth','CLI authenticated wait/migrate/status/dry-run','source and compiled database readiness','prepare env names without secrets','external read-only consumer'],consumer};
+writeFileSync(path.join(artifacts,`auth-consumer-${process.platform}.json`),JSON.stringify(result,null,2)+'\n');
+console.log(JSON.stringify(result,null,2));

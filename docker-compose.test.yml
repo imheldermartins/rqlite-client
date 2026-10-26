@@ -1,4 +1,18 @@
 services:
+  authenticated-consumer:
+    image: rqlite/rqlite:10.3.3@sha256:d333ab884b9451aecb12e29fbc2dfbb013d9f582763f288d79dcac5f20bfc312
+    entrypoint: ["rqlited"]
+    command: ["-node-id", "rqlite-auth-consumer", "-http-addr", "0.0.0.0:4001", "-http-adv-addr", "authenticated-consumer:4001", "-raft-addr", "0.0.0.0:4002", "-raft-adv-addr", "authenticated-consumer:4002", "-auth", "/auth.json", "/rqlite/file"]
+    ports: ["127.0.0.1:18019:4001"]
+    volumes: ["./tests/fixtures/rqlite-auth.json:/auth.json:ro"]
+    tmpfs: ["/rqlite/file:uid=1000,gid=1000"]
+  authenticated:
+    image: rqlite/rqlite:10.3.3@sha256:d333ab884b9451aecb12e29fbc2dfbb013d9f582763f288d79dcac5f20bfc312
+    entrypoint: ["rqlited"]
+    command: ["-node-id", "rqlite-auth", "-http-addr", "0.0.0.0:4001", "-http-adv-addr", "authenticated:4001", "-raft-addr", "0.0.0.0:4002", "-raft-adv-addr", "authenticated:4002", "-auth", "/auth.json", "/rqlite/file"]
+    ports: ["127.0.0.1:18017:4001"]
+    volumes: ["./tests/fixtures/rqlite-auth.json:/auth.json:ro"]
+    tmpfs: ["/rqlite/file:uid=1000,gid=1000"]
   package:
     image: rqlite/rqlite:10.3.3@sha256:d333ab884b9451aecb12e29fbc2dfbb013d9f582763f288d79dcac5f20bfc312
     entrypoint: ["rqlited"]

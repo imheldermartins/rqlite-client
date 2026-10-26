@@ -29,5 +29,7 @@ jobs:
           RUN_RQLITE_CLIENT_INTEGRATION: '1'
       - if: runner.os == 'Linux'
         run: npm run test:consumer
+      - if: runner.os == 'Linux'
+        run: node scripts/auth-consumer-smoke.mjs
       - if: always() && runner.os == 'Linux'
         run: docker compose -p rqlite-client-ci -f docker-compose.test.yml down
