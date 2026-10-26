@@ -7,7 +7,7 @@ export type BatchResult<T = Record<string, unknown>> =
   | { kind: 'ddl'; index: number };
 export interface RequestOptions { endpoint?: 'query' | 'execute' | 'request'; transaction?: boolean; consistency?: 'strong' | 'weak' | 'linearizable' | 'none' }
 export interface BasicAuthCredentials { username: string; password: string }
-export interface ConnectionOptions { url: string; auth?: BasicAuthCredentials; fetch?: typeof fetch; timeoutMs?: number }
+export interface ConnectionOptions { url: string; auth?: BasicAuthCredentials | undefined; fetch?: typeof fetch; timeoutMs?: number }
 /** Read an optional credential pair without placing secrets in URLs or config artifacts. */
 export function basicAuthFromEnv(usernameEnv: string, passwordEnv: string, env: Readonly<Record<string, string | undefined>> = process.env): BasicAuthCredentials | undefined {
   const username = env[usernameEnv], password = env[passwordEnv];
